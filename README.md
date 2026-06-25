@@ -38,11 +38,12 @@ It is a **one-way ratchet**: it can only ever make a memory action *safer* (→ 
 - **The restraint guardrail** (`lib/policy.ts`) is the deterministic safety net that guarantees escalation on risky writes.
 - **Next.js (App Router) + TypeScript + Tailwind**, deployed on Vercel.
 - **Memory persists across sessions** (localStorage in the demo): `store`/`update` decisions write back and accumulate, and reloading the page restores your last session. Production would swap in a server store (Supabase / Vercel KV).
+- **Timely forgetting (decay):** a memory with a `ttlDays` goes *stale* once past its TTL and **loses its overwrite protection**, so outdated facts get refreshed instead of guarded — while locked/fresh facts stay protected. So Recall knows when to write, when to **forget**, and when to refuse.
 - **A key-free deterministic fallback** keeps the app running if the API is unavailable, so the demo never crashes.
 
 ## Tests
 
-The safety property is unit-tested: **19 Vitest assertions** (`npm test`) pin the guardrail invariants — low-confidence, high-stakes, and locked/high-confidence overwrites all force escalation; a clean new fact stores; a restatement is downgraded to `ignore`; and an `escalate` is never downgraded to a write (the one-way ratchet). See [`tests/restraint.test.ts`](tests/restraint.test.ts).
+The safety property is unit-tested: **23 Vitest tests** (`npm test`) pin the guardrail invariants — low-confidence, high-stakes, and locked/high-confidence overwrites all force escalation; a clean new fact stores; a restatement is downgraded to `ignore`; a **stale** memory loses its protection and is refreshed; and an `escalate` is never downgraded to a write (the one-way ratchet). See [`tests/restraint.test.ts`](tests/restraint.test.ts).
 
 ## Run it locally
 
@@ -57,7 +58,7 @@ Click **Run Recall on the signals**. With a valid key it uses live Qwen; without
 ## What's next
 
 - Swap the demo's localStorage for a server store (Supabase / Vercel KV) and learn the lock/confidence thresholds from human confirmations over time.
-- Add timely **decay/forgetting**: down-weight or expire stale, low-value memories so the agent also knows *when to forget*, not just when to refuse.
+- Context-budgeted recall: rank memories by relevance/recency and load only the top-N within a token budget.
 - A "memory diff" view so a human approves an escalated overwrite in one click.
 - Cross-agent memory: let other agents read Recall's vetted memory but never write it unguarded.
 

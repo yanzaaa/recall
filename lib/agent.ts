@@ -97,7 +97,6 @@ export function assessMemoryRisk(
     conflictsLocked: conflictsExisting && !!existing?.locked,
     existingConfidence: existing?.confidence ?? 0,
     existingStale: existing ? isStale(existing, refISO) : false,
-    isHighStakes: stakes === "high",
   };
 }
 
@@ -151,7 +150,7 @@ export function fallbackTriage(signal: IncomingSignal, store: MemoryItem[]): Mem
   const flags: string[] = [];
 
   let raw: MemoryAction;
-  let confidence = signal.confidence;
+  const confidence = signal.confidence;
   let reasoning: string;
 
   if (!risk.hasExisting) {

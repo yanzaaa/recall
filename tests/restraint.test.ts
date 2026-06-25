@@ -10,7 +10,7 @@ const sig = (over: Partial<IncomingSignal> = {}): IncomingSignal => ({
 });
 const risk = (over: Partial<MemoryRisk> = {}): MemoryRisk => ({
   hasExisting: false, conflictsExisting: false, conflictsLocked: false,
-  existingConfidence: 0, existingStale: false, isHighStakes: false, ...over,
+  existingConfidence: 0, existingStale: false, ...over,
 });
 const mem = (over: Partial<MemoryItem> = {}): MemoryItem => ({
   id: "x", key: "k", value: "v", confidence: 0.9, locked: false, source: "s", updatedAt: "2026-01-01", ...over,
@@ -49,7 +49,7 @@ describe("applyMemoryRestraint — the deterministic memory guardrail", () => {
   });
 
   it("escalates a high-stakes action regardless of confidence", () => {
-    const r = applyMemoryRestraint("store", sig({ confidence: 0.99, stakes: "high" }), risk({ isHighStakes: true }), []);
+    const r = applyMemoryRestraint("store", sig({ confidence: 0.99, stakes: "high" }), risk(), []);
     expect(r.action).toBe("escalate");
     expect(r.heldBack).toBe(true);
     expect(r.flags).toContain("high-stakes");

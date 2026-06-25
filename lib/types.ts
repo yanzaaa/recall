@@ -43,5 +43,4 @@ export interface MemoryRisk {
   conflictsLocked: boolean; // the conflicting existing memory is locked
   existingConfidence: number; // confidence of the existing memory (0 if none)
   existingStale: boolean; // the existing memory is past its TTL (outdated -> safe to refresh)
-  isHighStakes: boolean;
 }

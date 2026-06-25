@@ -142,7 +142,15 @@ export default function Page() {
     if (d.action === "update") {
       return current.map((m) => (m.key === s.proposesKey ? { ...m, value: s.proposesValue, confidence: s.confidence, updatedAt: today } : m));
     }
-    return current; // ignore / escalate never mutate memory
+    if (d.action === "ignore") {
+      // A confirming restatement REINFORCES the memory: nudge confidence up + refresh (un-stale) it.
+      return current.map((m) =>
+        m.key === s.proposesKey && m.value.trim().toLowerCase() === s.proposesValue.trim().toLowerCase()
+          ? { ...m, confidence: Math.min(0.99, +(m.confidence + 0.03).toFixed(3)), updatedAt: today }
+          : m,
+      );
+    }
+    return current; // escalate never mutates memory
   }
 
   async function send(signal: IncomingSignal, currentStore: MemoryItem[]): Promise<MemoryDecision | undefined> {
