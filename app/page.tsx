@@ -97,6 +97,11 @@ function DecisionBody({ d }: { d: MemoryDecision }) {
           <span>· tool call: <span className="gk-num">{d.toolsUsed.join(", ")}</span></span>
         )}
       </div>
+      {d.recalled && d.recalled.length > 0 && (
+        <div className="text-[11px] text-[var(--mut)] mt-1.5">
+          context window · recalled <span className="gk-num">{d.recalled.length}</span>: <span className="gk-num">{d.recalled.join(", ")}</span>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -115,64 +120,47 @@ export default function Page() {
   });
   const [custom, setCustom] = useState<Cell>();
 
-  // Memory PERSISTS across sessions (localStorage). This is the whole point of a memory
-  // agent: the store actually accumulates — reload the page and your last session is restored.
+  // Memory lives SERVER-SIDE (durable Postgres via Supabase) — the same store on any device,
+  // genuinely accumulating across sessions. Load it on mount.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("recall.memory.v1");
-      if (saved) setStore(JSON.parse(saved));
-    } catch {}
+    fetch("/api/recall")
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.store)) setStore(d.store); })
+      .catch(() => {});
   }, []);
-  const persist = (next: MemoryItem[]) => {
-    setStore(next);
-    try { localStorage.setItem("recall.memory.v1", JSON.stringify(next)); } catch {}
-  };
-  const resetMemory = () => {
-    try { localStorage.removeItem("recall.memory.v1"); } catch {}
-    setStore(MEMORY); setCells({}); setCustom(undefined);
-  };
 
   const today = new Date().toISOString().slice(0, 10);
   const memStale = (m: MemoryItem) =>
     !m.locked && m.ttlDays != null && (Date.parse(today) - Date.parse(m.updatedAt)) / 86_400_000 > m.ttlDays;
-  function applyDecision(current: MemoryItem[], s: IncomingSignal, d: MemoryDecision): MemoryItem[] {
-    if (d.action === "store" && !current.some((m) => m.key === s.proposesKey)) {
-      return [...current, { id: s.id, key: s.proposesKey, value: s.proposesValue, confidence: s.confidence, locked: false, source: "learned this session", updatedAt: today }];
-    }
-    if (d.action === "update") {
-      return current.map((m) => (m.key === s.proposesKey ? { ...m, value: s.proposesValue, confidence: s.confidence, updatedAt: today } : m));
-    }
-    if (d.action === "ignore") {
-      // A confirming restatement REINFORCES the memory: nudge confidence up + refresh (un-stale) it.
-      return current.map((m) =>
-        m.key === s.proposesKey && m.value.trim().toLowerCase() === s.proposesValue.trim().toLowerCase()
-          ? { ...m, confidence: Math.min(0.99, +(m.confidence + 0.03).toFixed(3)), updatedAt: today }
-          : m,
-      );
-    }
-    return current; // escalate never mutates memory
+
+  async function resetMemory() {
+    setCells({}); setCustom(undefined);
+    try {
+      const r = await fetch("/api/recall", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reset: true }) });
+      const d = await r.json();
+      if (Array.isArray(d.store)) setStore(d.store);
+    } catch {}
   }
 
-  async function send(signal: IncomingSignal, currentStore: MemoryItem[]): Promise<MemoryDecision | undefined> {
+  async function send(signal: IncomingSignal): Promise<MemoryDecision | undefined> {
     const res = await fetch("/api/recall", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ signal, store: currentStore }),
+      body: JSON.stringify({ signal }),
     });
-    const { decision } = (await res.json()) as { decision: MemoryDecision };
-    if (decision?.engine) setEngine(decision.engine);
-    return decision;
+    const data = (await res.json()) as { decision: MemoryDecision; store: MemoryItem[] };
+    if (data.decision?.engine) setEngine(data.decision.engine);
+    if (Array.isArray(data.store)) setStore(data.store); // server-authoritative, persisted store
+    return data.decision;
   }
 
   async function run() {
     setRunning(true);
     setCells({});
-    let working = [...store];
     for (const s of QUEUE) {
       setCells((c) => ({ ...c, [s.id]: "loading" }));
       try {
-        const d = await send(s, working);
-        if (d) { working = applyDecision(working, s, d); persist(working); }
+        const d = await send(s);
         setCells((c) => ({ ...c, [s.id]: d }));
       } catch {
         setCells((c) => ({ ...c, [s.id]: undefined }));
@@ -192,11 +180,7 @@ export default function Page() {
       stakes: (form.stakes as IncomingSignal["stakes"]) || "low",
       kind: "fact",
     };
-    try {
-      const d = await send(s, store);
-      if (d) persist(applyDecision(store, s, d));
-      setCustom(d ?? undefined);
-    } catch { setCustom(undefined); }
+    try { setCustom((await send(s)) ?? undefined); } catch { setCustom(undefined); }
   }
 
   const done = Object.values(cells).filter((d): d is MemoryDecision => !!d && d !== "loading");

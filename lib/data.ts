@@ -7,6 +7,11 @@ export const MEMORY: MemoryItem[] = [
   { id: "m3", key: "home_airport", value: "SFO", confidence: 0.85, locked: false, source: "inferred from 6 trips", updatedAt: "2026-06-01" },
   { id: "m4", key: "coffee_order", value: "oat-milk latte", confidence: 0.6, locked: false, source: "ordered twice", updatedAt: "2026-06-10" },
   { id: "m5", key: "work_address", value: "123 Market St", confidence: 0.9, locked: false, source: "set when you started the job", updatedAt: "2026-03-10", ttlDays: 60 },
+  { id: "m6", key: "timezone", value: "America/Los_Angeles", confidence: 0.92, locked: false, source: "device locale", updatedAt: "2026-06-05" },
+  { id: "m7", key: "language", value: "English", confidence: 0.97, locked: true, source: "account setting", updatedAt: "2026-02-01" },
+  { id: "m8", key: "newsletter", value: "weekly digest", confidence: 0.5, locked: false, source: "signup default", updatedAt: "2026-05-20" },
+  { id: "m9", key: "shoe_size", value: "US 10.5", confidence: 0.8, locked: false, source: "a past order", updatedAt: "2026-01-22", ttlDays: 120 },
+  { id: "m10", key: "emergency_contact", value: "Maria (sister)", confidence: 0.95, locked: true, source: "you confirmed it", updatedAt: "2026-04-30" },
 ];
 
 // New signals arriving this session. Mix of clear writes, noise, and the dangerous middle

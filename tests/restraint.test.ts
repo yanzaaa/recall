@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyMemoryRestraint, assessMemoryRisk, fallbackTriage, isStale } from "../lib/agent";
+import { recallRelevant } from "../lib/recall";
 import { MEMORY_RESTRAINT } from "../lib/policy";
 import { MEMORY, QUEUE } from "../lib/data";
 import type { IncomingSignal, MemoryItem, MemoryRisk } from "../lib/types";
@@ -161,5 +162,26 @@ describe("fallbackTriage — end-to-end over the demo signals", () => {
 
   it("consulted the inspect_memory tool on every decision", () => {
     for (const s of QUEUE) expect(fallbackTriage(s, MEMORY).toolsUsed).toContain("inspect_memory");
+  });
+
+  it("records a budgeted recall window (1..3) on every decision", () => {
+    for (const s of QUEUE) {
+      const d = fallbackTriage(s, MEMORY);
+      expect(Array.isArray(d.recalled)).toBe(true);
+      expect(d.recalled!.length).toBeGreaterThan(0);
+      expect(d.recalled!.length).toBeLessThanOrEqual(3);
+    }
+  });
+});
+
+describe("recallRelevant — context-budgeted recall", () => {
+  it("always loads the targeted memory and respects the budget", () => {
+    const { loaded, skipped } = recallRelevant(MEMORY, { proposesKey: "diet", proposesValue: "vegan", text: "gone vegan" }, 3);
+    expect(loaded.length).toBe(3);
+    expect(loaded.map((m) => m.key)).toContain("diet");
+    expect(loaded.length + skipped.length).toBe(MEMORY.length);
+  });
+  it("never loads more than the budget", () => {
+    expect(recallRelevant(MEMORY, { proposesKey: "nope", proposesValue: "x", text: "unrelated" }, 2).loaded.length).toBe(2);
   });
 });

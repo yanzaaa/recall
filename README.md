@@ -37,8 +37,9 @@ It is a **one-way ratchet**: it can only ever make a memory action *safer* (→ 
 - **Tool-calling:** before deciding, the agent makes a real Qwen **function call**, `inspect_memory`, to fetch the deterministic state of the existing memory (value, confidence, locked) instead of guessing it. The args are computed from the trusted store, so the model can't poison its own risk signal.
 - **The restraint guardrail** (`lib/policy.ts`) is the deterministic safety net that guarantees escalation on risky writes.
 - **Next.js (App Router) + TypeScript + Tailwind**, deployed on Vercel.
-- **Memory persists across sessions** (localStorage in the demo): `store`/`update` decisions write back and accumulate, and reloading the page restores your last session. Production would swap in a server store (Supabase / Vercel KV).
-- **Timely forgetting (decay):** a memory with a `ttlDays` goes *stale* once past its TTL and **loses its overwrite protection**, so outdated facts get refreshed instead of guarded — while locked/fresh facts stay protected. So Recall knows when to write, when to **forget**, and when to refuse.
+- **Durable, server-side memory (Supabase / Postgres):** the store lives on the server, not the browser, so `store`/`update` decisions persist and **accumulate across sessions and devices** — a judge on a fresh machine sees the same memory. Degrades to an in-memory seed if the DB is unconfigured. See [`lib/store.ts`](lib/store.ts).
+- **Context-budgeted recall:** before each decision the agent ranks memories by relevance and loads only the **top-K within a budget** into the model's context (the rest stay out). See [`lib/recall.ts`](lib/recall.ts).
+- **Timely forgetting (decay):** a memory with a `ttlDays` goes *stale* once past its TTL and **loses its overwrite protection**, so outdated facts get refreshed instead of guarded — while locked/fresh facts stay protected. So Recall knows when to write, when to **forget**, when to **recall under budget**, and when to refuse.
 - **A key-free deterministic fallback** keeps the app running if the API is unavailable, so the demo never crashes.
 
 ## Tests
@@ -57,8 +58,8 @@ Click **Run Recall on the signals**. With a valid key it uses live Qwen; without
 
 ## What's next
 
-- Swap the demo's localStorage for a server store (Supabase / Vercel KV) and learn the lock/confidence thresholds from human confirmations over time.
-- Context-budgeted recall: rank memories by relevance/recency and load only the top-N within a token budget.
+- Learn the lock / confidence / TTL thresholds from human confirmations and overrides over time.
+- Embeddings-based relevance for the recall ranker, and per-user memory namespaces.
 - A "memory diff" view so a human approves an escalated overwrite in one click.
 - Cross-agent memory: let other agents read Recall's vetted memory but never write it unguarded.
 

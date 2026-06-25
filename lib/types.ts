@@ -34,6 +34,7 @@ export interface MemoryDecision {
   engine: "qwen" | "fallback";
   model?: string;
   toolsUsed?: string[];
+  recalled?: string[]; // memory keys loaded into the context window for this decision (budgeted recall)
 }
 
 // Deterministic signals the agent looks up via a tool instead of guessing.

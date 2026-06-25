@@ -2,6 +2,9 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/reso
 import type { MemoryAction, MemoryDecision, MemoryItem, MemoryRisk, IncomingSignal } from "./types";
 import { MEMORY_POLICY, MEMORY_RESTRAINT } from "./policy";
 import { qwenClient, QWEN_MODEL } from "./qwen";
+import { recallRelevant } from "./recall";
+
+const RECALL_BUDGET = 3; // memories loaded into the context window per decision
 
 const SYSTEM = `You are Recall, an autonomous personal-memory agent. You maintain a long-lived memory of
 facts and preferences about the user. For each incoming signal you decide ONE action:
@@ -147,6 +150,7 @@ export function applyMemoryRestraint(
 // if the API is unavailable). Mirrors the policy + restraint rules and the same risk signals.
 export function fallbackTriage(signal: IncomingSignal, store: MemoryItem[]): MemoryDecision {
   const risk = assessMemoryRisk(store, signal.proposesKey, signal.proposesValue, signal.stakes);
+  const recalled = recallRelevant(store, signal, RECALL_BUDGET).loaded.map((m) => m.key);
   const flags: string[] = [];
 
   let raw: MemoryAction;
@@ -177,6 +181,7 @@ export function fallbackTriage(signal: IncomingSignal, store: MemoryItem[]): Mem
     riskFlags: restrained.flags,
     engine: "fallback",
     toolsUsed: ["inspect_memory"],
+    recalled,
   };
 }
 
@@ -185,9 +190,12 @@ export async function triage(signal: IncomingSignal, store: MemoryItem[]): Promi
   if (!client) return fallbackTriage(signal, store);
 
   try {
+    const recall = recallRelevant(store, signal, RECALL_BUDGET);
+    const recalled = recall.loaded.map((m) => m.key);
+    const contextNote = `Memories recalled into your context window (top ${recall.loaded.length} of ${store.length} by relevance; the rest are out of context): ${recall.loaded.map((m) => `${m.key}=${m.value}`).join("; ") || "(none)"}.`;
     const convo: ChatCompletionMessageParam[] = [
       { role: "system", content: SYSTEM },
-      { role: "user", content: signalPrompt(signal) },
+      { role: "user", content: `${signalPrompt(signal)}\n\n${contextNote}` },
     ];
     const toolsUsed: string[] = [];
 
@@ -257,6 +265,7 @@ export async function triage(signal: IncomingSignal, store: MemoryItem[]): Promi
       engine: "qwen",
       model: QWEN_MODEL,
       toolsUsed,
+      recalled,
     };
   } catch {
     const fb = fallbackTriage(signal, store);
