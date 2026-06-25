@@ -50,6 +50,15 @@ The safety property is unit-tested: **26 Vitest tests** (`npm test`) pin the gua
 
 > Note: writes are last-write-wins per key (best-effort under concurrency) — fine for the demo; a production deployment would use a transactional upsert.
 
+## Use it as an MCP server
+
+Recall's memory is exposed to any MCP client (Claude Desktop, Cursor, other agents) over stdio — run `npm run mcp` ([`mcp-server.ts`](mcp-server.ts)). Two tools:
+
+- `get_memory` — read the vetted, durable memory store.
+- `submit_signal` — propose a write; Recall decides store/update/ignore/escalate under the **same deterministic guardrail**.
+
+The point: a *second* agent reading/writing Recall's memory still cannot corrupt it. Submitting "I've gone vegan → update diet" via MCP against the locked `diet` memory is **held back and escalated**, exactly as in the app — restraint travels with the memory, not the caller.
+
 ## Run it locally
 
 ```bash
