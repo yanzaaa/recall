@@ -48,7 +48,7 @@ It is a **one-way ratchet**: it can only ever make a memory action *safer* (→ 
 
 The safety property is unit-tested: **26 Vitest tests** (`npm test`) pin the guardrail invariants — low-confidence, high-stakes, and locked/high-confidence overwrites all force escalation; a clean new fact stores; a restatement is downgraded to `ignore`; a **stale** memory loses its protection and is refreshed; budgeted recall loads only the top-K within its budget; and an `escalate` is never downgraded to a write (the one-way ratchet). See [`tests/restraint.test.ts`](tests/restraint.test.ts).
 
-> Note: writes are last-write-wins per key (best-effort under concurrency) — fine for the demo; a production deployment would use a transactional upsert.
+> Note: writes use a Postgres upsert (`on_conflict=key`, `merge-duplicates`) so concurrent writers merge into one row rather than duplicate; it is last-write-wins per key under contention, which is fine for the demo.
 
 ## Use it as an MCP server
 
