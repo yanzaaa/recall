@@ -116,7 +116,10 @@ export function applyMemoryRestraint(
   const blocking = [...flags].some((f) => (MEMORY_RESTRAINT.blockingFlags as readonly string[]).includes(f));
 
   if (lowConfidence || highStakes || overwriteProtected || blocking) {
-    if (overwriteProtected) flags.add("conflicts-locked-memory");
+    if (overwriteProtected) {
+      // Be precise about WHY: a locked memory vs a merely high-confidence (>= floor) one.
+      flags.add(risk.conflictsLocked ? "conflicts-locked-memory" : "conflicts-protected-memory");
+    }
     return { action: "escalate", heldBack: true, flags: [...flags] };
   }
   return { action: rawAction, heldBack: false, flags: [...flags] };

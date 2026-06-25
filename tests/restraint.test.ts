@@ -117,10 +117,13 @@ describe("fallbackTriage — end-to-end over the demo signals", () => {
     expect(fallbackTriage(byId("S-05"), MEMORY).action).toBe("ignore");
   });
 
-  it("escalates a low-confidence change to a high-confidence memory", () => {
+  it("escalates a low-confidence change to a high-confidence (unlocked) memory and labels it precisely", () => {
     const d = fallbackTriage(byId("S-06"), MEMORY);
     expect(d.action).toBe("escalate");
     expect(d.heldBack).toBe(true);
+    // The memory is NOT locked, so the flag must say "protected", not "locked".
+    expect(d.riskFlags).toContain("conflicts-protected-memory");
+    expect(d.riskFlags).not.toContain("conflicts-locked-memory");
   });
 
   it("escalates a high-stakes action (S-04) and a confident overwrite of a locked memory (S-08)", () => {

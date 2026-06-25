@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import dynamic from "next/dynamic";
 import { MEMORY, QUEUE } from "@/lib/data";
-import type { MemoryDecision, IncomingSignal } from "@/lib/types";
+import type { MemoryDecision, IncomingSignal, MemoryItem } from "@/lib/types";
 
 const Hero3D = dynamic(() => import("@/components/Hero3D"), { ssr: false });
 
@@ -81,9 +81,12 @@ function DecisionBody({ d }: { d: MemoryDecision }) {
         </div>
       )}
       {d.heldBack && (
-        <div className="gk-held mt-2.5">
-          ⚠ The model proposed <b>{d.rawAction}</b>, so Recall held back and escalated instead of touching memory.
-        </div>
+        <>
+          <div className="text-[11.5px] text-[var(--mut)] mt-2.5 italic">A naive agent would have silently overwritten this.</div>
+          <div className="gk-held mt-1.5">
+            ⚠ The model proposed <b>{d.rawAction}</b>, so Recall held back and escalated instead of touching memory.
+          </div>
+        </>
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2.5 text-[11px] text-[var(--mut)]">
         <span className="inline-flex items-center gap-1.5">
@@ -102,6 +105,7 @@ export default function Page() {
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [running, setRunning] = useState(false);
   const [engine, setEngine] = useState<string>();
+  const [store, setStore] = useState<MemoryItem[]>(MEMORY);
   const [form, setForm] = useState({
     text: "I prefer late-evening flights.",
     proposesKey: "diet",
@@ -111,11 +115,39 @@ export default function Page() {
   });
   const [custom, setCustom] = useState<Cell>();
 
-  async function send(signal: IncomingSignal): Promise<MemoryDecision | undefined> {
+  // Memory PERSISTS across sessions (localStorage). This is the whole point of a memory
+  // agent: the store actually accumulates — reload the page and your last session is restored.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("recall.memory.v1");
+      if (saved) setStore(JSON.parse(saved));
+    } catch {}
+  }, []);
+  const persist = (next: MemoryItem[]) => {
+    setStore(next);
+    try { localStorage.setItem("recall.memory.v1", JSON.stringify(next)); } catch {}
+  };
+  const resetMemory = () => {
+    try { localStorage.removeItem("recall.memory.v1"); } catch {}
+    setStore(MEMORY); setCells({}); setCustom(undefined);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  function applyDecision(current: MemoryItem[], s: IncomingSignal, d: MemoryDecision): MemoryItem[] {
+    if (d.action === "store" && !current.some((m) => m.key === s.proposesKey)) {
+      return [...current, { id: s.id, key: s.proposesKey, value: s.proposesValue, confidence: s.confidence, locked: false, source: "learned this session", updatedAt: today }];
+    }
+    if (d.action === "update") {
+      return current.map((m) => (m.key === s.proposesKey ? { ...m, value: s.proposesValue, confidence: s.confidence, updatedAt: today } : m));
+    }
+    return current; // ignore / escalate never mutate memory
+  }
+
+  async function send(signal: IncomingSignal, currentStore: MemoryItem[]): Promise<MemoryDecision | undefined> {
     const res = await fetch("/api/recall", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ signal, store: MEMORY }),
+      body: JSON.stringify({ signal, store: currentStore }),
     });
     const { decision } = (await res.json()) as { decision: MemoryDecision };
     if (decision?.engine) setEngine(decision.engine);
@@ -125,10 +157,12 @@ export default function Page() {
   async function run() {
     setRunning(true);
     setCells({});
+    let working = [...store];
     for (const s of QUEUE) {
       setCells((c) => ({ ...c, [s.id]: "loading" }));
       try {
-        const d = await send(s);
+        const d = await send(s, working);
+        if (d) { working = applyDecision(working, s, d); persist(working); }
         setCells((c) => ({ ...c, [s.id]: d }));
       } catch {
         setCells((c) => ({ ...c, [s.id]: undefined }));
@@ -148,7 +182,11 @@ export default function Page() {
       stakes: (form.stakes as IncomingSignal["stakes"]) || "low",
       kind: "fact",
     };
-    try { setCustom((await send(s)) ?? undefined); } catch { setCustom(undefined); }
+    try {
+      const d = await send(s, store);
+      if (d) persist(applyDecision(store, s, d));
+      setCustom(d ?? undefined);
+    } catch { setCustom(undefined); }
   }
 
   const done = Object.values(cells).filter((d): d is MemoryDecision => !!d && d !== "loading");
@@ -209,10 +247,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* Existing memory */}
-      <Reveal className="gk-kicker mt-20 mb-4">What Recall already knows</Reveal>
+      {/* Existing memory — persists across sessions, accumulates live */}
+      <Reveal className="mt-20 mb-4 flex items-end justify-between gap-4">
+        <div>
+          <div className="gk-kicker">What Recall already knows · {store.length} memories</div>
+          <div className="text-[12px] text-[var(--mut)] mt-1.5">Persists across sessions — reload and your last session is restored. Writes accumulate here live as signals are processed.</div>
+        </div>
+        <button className="gk-pill" onClick={resetMemory} style={{ cursor: "pointer" }}>Reset memory</button>
+      </Reveal>
       <div className="grid md:grid-cols-2 gap-3.5">
-        {MEMORY.map((m, idx) => (
+        {store.map((m, idx) => (
           <Reveal key={m.id} delay={Math.min(idx * 0.04, 0.3)}>
             <div className="glass p-4">
               <div className="flex items-start justify-between gap-3">
