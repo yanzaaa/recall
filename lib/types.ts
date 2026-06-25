@@ -9,6 +9,7 @@ export interface MemoryItem {
   locked: boolean; // user-confirmed / high-trust: never silently overwrite
   source: string; // how it was learned
   updatedAt: string;
+  ttlDays?: number; // if set, the fact goes "stale" this many days after updatedAt (timely forgetting)
 }
 
 // A new observation arriving this session that may touch memory.
@@ -41,5 +42,6 @@ export interface MemoryRisk {
   conflictsExisting: boolean; // an existing memory has a different value
   conflictsLocked: boolean; // the conflicting existing memory is locked
   existingConfidence: number; // confidence of the existing memory (0 if none)
+  existingStale: boolean; // the existing memory is past its TTL (outdated -> safe to refresh)
   isHighStakes: boolean;
 }

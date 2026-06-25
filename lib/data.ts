@@ -6,6 +6,7 @@ export const MEMORY: MemoryItem[] = [
   { id: "m2", key: "budget_cap", value: "$200 per discretionary purchase", confidence: 0.9, locked: true, source: "set in account settings", updatedAt: "2026-04-18" },
   { id: "m3", key: "home_airport", value: "SFO", confidence: 0.85, locked: false, source: "inferred from 6 trips", updatedAt: "2026-06-01" },
   { id: "m4", key: "coffee_order", value: "oat-milk latte", confidence: 0.6, locked: false, source: "ordered twice", updatedAt: "2026-06-10" },
+  { id: "m5", key: "work_address", value: "123 Market St", confidence: 0.9, locked: false, source: "set when you started the job", updatedAt: "2026-03-10", ttlDays: 60 },
 ];
 
 // New signals arriving this session. Mix of clear writes, noise, and the dangerous middle
@@ -82,5 +83,14 @@ export const QUEUE: IncomingSignal[] = [
     confidence: 0.9,
     stakes: "low",
     kind: "preference",
+  },
+  {
+    id: "S-09",
+    text: "I moved offices — my work address is 500 Howard St now.",
+    proposesKey: "work_address",
+    proposesValue: "500 Howard St",
+    confidence: 0.85,
+    stakes: "low",
+    kind: "fact",
   },
 ];

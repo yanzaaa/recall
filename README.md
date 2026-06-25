@@ -6,6 +6,8 @@ A memory agent's job is to remember. The trap is that the dangerous failure isn'
 
 **Recall is an autonomous memory agent built on Qwen that remembers what's clear, ignores the noise, and refuses to corrupt a trusted memory** — escalating to a human instead of overwriting it.
 
+![Architecture](public/architecture.png)
+
 ## What it does
 
 Recall holds a long-lived memory of facts and preferences about the user. For each incoming signal it decides one action:

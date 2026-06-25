@@ -133,6 +133,8 @@ export default function Page() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
+  const memStale = (m: MemoryItem) =>
+    !m.locked && m.ttlDays != null && (Date.parse(today) - Date.parse(m.updatedAt)) / 86_400_000 > m.ttlDays;
   function applyDecision(current: MemoryItem[], s: IncomingSignal, d: MemoryDecision): MemoryItem[] {
     if (d.action === "store" && !current.some((m) => m.key === s.proposesKey)) {
       return [...current, { id: s.id, key: s.proposesKey, value: s.proposesValue, confidence: s.confidence, locked: false, source: "learned this session", updatedAt: today }];
@@ -264,7 +266,11 @@ export default function Page() {
                   <div className="text-[13px] text-[var(--mut)] gk-num">{m.key}</div>
                   <div className="text-[15px] font-semibold mt-0.5">{m.value}</div>
                 </div>
-                {m.locked && <span className="gk-flag" style={{ color: "#e9b3ff" }}>🔒 locked</span>}
+                {m.locked ? (
+                  <span className="gk-flag" style={{ color: "#e9b3ff" }}>🔒 locked</span>
+                ) : memStale(m) ? (
+                  <span className="gk-flag" style={{ color: "var(--amber)" }}>⏳ stale</span>
+                ) : null}
               </div>
               <div className="flex items-center gap-2 mt-2.5">
                 <div className="gk-bar flex-1"><span style={{ width: fmtPct(m.confidence) }} /></div>

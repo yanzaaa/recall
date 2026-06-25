@@ -20,6 +20,9 @@ irreversible action, you ESCALATE to the human instead of mutating memory or act
 If the signal's proposed value is the same as (or a trivial restatement of) what you already have,
 choose "ignore" — there is nothing to change; do not log a no-op update.
 
+If the existing memory is marked STALE in the tool result (it is past its TTL), treat it as
+outdated: prefer to refresh it with a confident new value rather than guard it as protected.
+
 TOOL USE: before deciding, you MUST call inspect_memory to get the deterministic state of the
 existing memory for this key (its value, confidence, and whether it is locked). Do not guess it.
 
@@ -65,11 +68,25 @@ Decide the action and return the JSON.`;
 
 // Deterministic memory lookup. Used both as the agent's tool implementation and inside the
 // key-free fallback, so the conflict/locked signals are computed the same robust way in both paths.
+// Today as YYYY-MM-DD (server-side); overridable for deterministic tests.
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Timely forgetting: a memory goes STALE (outdated -> safe to refresh) once it is past its TTL.
+// Locked facts and facts with no TTL never go stale.
+export function isStale(item: MemoryItem, refISO: string = todayISO()): boolean {
+  if (item.locked || item.ttlDays == null) return false;
+  const days = (Date.parse(refISO) - Date.parse(item.updatedAt)) / 86_400_000;
+  return days > item.ttlDays;
+}
+
 export function assessMemoryRisk(
   store: MemoryItem[],
   key: string,
   proposedValue: string,
   stakes: IncomingSignal["stakes"],
+  refISO: string = todayISO(),
 ): MemoryRisk {
   const existing = store.find((m) => m.key === key);
   const norm = (v: string) => v.trim().toLowerCase();
@@ -79,6 +96,7 @@ export function assessMemoryRisk(
     conflictsExisting,
     conflictsLocked: conflictsExisting && !!existing?.locked,
     existingConfidence: existing?.confidence ?? 0,
+    existingStale: existing ? isStale(existing, refISO) : false,
     isHighStakes: stakes === "high",
   };
 }
@@ -112,6 +130,7 @@ export function applyMemoryRestraint(
   const overwriteProtected =
     rawAction === "update" &&
     risk.conflictsExisting &&
+    !risk.existingStale && // a stale memory is outdated -> safe to refresh, not protected
     (risk.conflictsLocked || risk.existingConfidence >= MEMORY_RESTRAINT.protectAboveConfidence);
   const blocking = [...flags].some((f) => (MEMORY_RESTRAINT.blockingFlags as readonly string[]).includes(f));
 

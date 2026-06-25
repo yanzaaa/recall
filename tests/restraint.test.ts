@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { applyMemoryRestraint, assessMemoryRisk, fallbackTriage } from "../lib/agent";
+import { applyMemoryRestraint, assessMemoryRisk, fallbackTriage, isStale } from "../lib/agent";
 import { MEMORY_RESTRAINT } from "../lib/policy";
 import { MEMORY, QUEUE } from "../lib/data";
-import type { IncomingSignal, MemoryRisk } from "../lib/types";
+import type { IncomingSignal, MemoryItem, MemoryRisk } from "../lib/types";
 
 const sig = (over: Partial<IncomingSignal> = {}): IncomingSignal => ({
   id: "T", text: "t", proposesKey: "k", proposesValue: "v",
@@ -10,7 +10,10 @@ const sig = (over: Partial<IncomingSignal> = {}): IncomingSignal => ({
 });
 const risk = (over: Partial<MemoryRisk> = {}): MemoryRisk => ({
   hasExisting: false, conflictsExisting: false, conflictsLocked: false,
-  existingConfidence: 0, isHighStakes: false, ...over,
+  existingConfidence: 0, existingStale: false, isHighStakes: false, ...over,
+});
+const mem = (over: Partial<MemoryItem> = {}): MemoryItem => ({
+  id: "x", key: "k", value: "v", confidence: 0.9, locked: false, source: "s", updatedAt: "2026-01-01", ...over,
 });
 
 describe("applyMemoryRestraint — the deterministic memory guardrail", () => {
@@ -91,6 +94,26 @@ describe("assessMemoryRisk — deterministic lookup", () => {
   it("does not flag a restatement of the same value as a conflict", () => {
     const r = assessMemoryRisk(MEMORY, "home_airport", "SFO", "low");
     expect(r.conflictsExisting).toBe(false);
+  });
+});
+
+describe("decay / timely forgetting", () => {
+  it("marks an unlocked memory past its TTL as stale", () => {
+    expect(isStale(mem({ updatedAt: "2026-01-01", ttlDays: 30 }), "2026-06-25")).toBe(true);
+  });
+  it("does not mark a fresh, no-TTL, or locked memory as stale", () => {
+    expect(isStale(mem({ updatedAt: "2026-06-20", ttlDays: 30 }), "2026-06-25")).toBe(false); // within TTL
+    expect(isStale(mem({ updatedAt: "2026-01-01" }), "2026-06-25")).toBe(false); // no TTL
+    expect(isStale(mem({ updatedAt: "2026-01-01", ttlDays: 30, locked: true }), "2026-06-25")).toBe(false); // locked
+  });
+  it("lets a STALE high-confidence memory be refreshed (decay removes its protection)", () => {
+    const r = applyMemoryRestraint("update", sig({ confidence: 0.85 }), risk({ hasExisting: true, conflictsExisting: true, existingConfidence: 0.9, existingStale: true }), []);
+    expect(r.action).toBe("update");
+    expect(r.heldBack).toBe(false);
+  });
+  it("end-to-end: refreshes the stale work_address instead of escalating", () => {
+    const d = fallbackTriage(QUEUE.find((q) => q.id === "S-09")!, MEMORY);
+    expect(d.action).toBe("update");
   });
 });
 
